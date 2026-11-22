@@ -6,234 +6,67 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const KaloriVisionApp());
-}
+const green=Color(0xff159447), dark=Color(0xff14251c), pale=Color(0xfff1f7f2);
+void main() async { WidgetsFlutterBinding.ensureInitialized(); runApp(const KaloriVisionApp()); }
 
 class Meal {
-  final String name, date;
-  final int calories;
-  final double protein, carbs, fat;
-  const Meal(this.name, this.date, this.calories, this.protein, this.carbs, this.fat);
-  Map<String,dynamic> toJson() => {'name':name,'date':date,'calories':calories,'protein':protein,'carbs':carbs,'fat':fat};
-  factory Meal.fromJson(Map<String,dynamic> j) => Meal(j['name'] ?? 'Öğün', j['date'] ?? '', (j['calories'] as num? ?? 0).round(), (j['protein'] as num? ?? 0).toDouble(), (j['carbs'] as num? ?? 0).toDouble(), (j['fat'] as num? ?? 0).toDouble());
+ final String name,date,slot;
+ final int calories;
+ final double protein,carbs,fat;
+ const Meal(this.name,this.date,this.calories,this.protein,this.carbs,this.fat,[this.slot='Ara öğün']);
+ Map<String,dynamic> toJson()=>{'name':name,'date':date,'calories':calories,'protein':protein,'carbs':carbs,'fat':fat,'slot':slot};
+ factory Meal.fromJson(Map<String,dynamic> j)=>Meal(j['name']??'Öğün',j['date']??'',(j['calories'] as num? ?? 0).round(),(j['protein'] as num? ?? 0).toDouble(),(j['carbs'] as num? ?? 0).toDouble(),(j['fat'] as num? ?? 0).toDouble(),j['slot']??'Ara öğün');
 }
+class KaloriVisionApp extends StatelessWidget { const KaloriVisionApp({super.key}); @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:'KaloriVision AI',theme:ThemeData(useMaterial3:true,scaffoldBackgroundColor:pale,colorScheme:ColorScheme.fromSeed(seedColor:green),appBarTheme:const AppBarTheme(backgroundColor:pale,foregroundColor:dark,elevation:0),cardTheme:CardThemeData(color:Colors.white,elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)))),home:const MainPage()); }
 
-class KaloriVisionApp extends StatelessWidget {
-  const KaloriVisionApp({super.key});
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner:false,
-    title:'KaloriVision AI',
-    theme:ThemeData(useMaterial3:true, colorScheme:ColorScheme.fromSeed(seedColor:const Color(0xff16866b)), scaffoldBackgroundColor:const Color(0xfff4f8f6)),
-    home:const HomePage(),
-  );
+class MainPage extends StatefulWidget { const MainPage({super.key}); @override State<MainPage> createState()=>_MainPageState(); }
+class _MainPageState extends State<MainPage> {
+ final picker=ImagePicker();
+ final nameC=TextEditingController(),kcalC=TextEditingController(),pC=TextEditingController(),cC=TextEditingController(),fC=TextEditingController(),goalC=TextEditingController(),keyC=TextEditingController(),chatC=TextEditingController();
+ final profile=<String,String>{'name':'','age':'30','height':'170','weight':'70','targetWeight':'65','gender':'Kadın','activity':'Hafif (haftada 1-3 gün spor)','goal':'Kilo ver','allergies':'','diet':'','diabetes':'false'};
+ List<Meal> meals=[]; int goal=2000,tab=0,water=0; double weight=70; String apiKey=''; bool busy=false; final List<Map<String,String>> chat=[];
+ String get today=>DateTime.now().toIso8601String().substring(0,10);
+ List<Meal> get todays=>meals.where((m)=>m.date==today).toList();
+ int get total=>todays.fold(0,(s,m)=>s+m.calories);
+ double get protein=>todays.fold(0.0,(s,m)=>s+m.protein),get carbs=>todays.fold(0.0,(s,m)=>s+m.carbs),get fats=>todays.fold(0.0,(s,m)=>s+m.fat);
+ @override void initState(){super.initState();load();}
+ Future<void> load() async {final s=await SharedPreferences.getInstance(); if(!mounted)return; setState((){meals=(s.getStringList('meals')??[]).map((e)=>Meal.fromJson(jsonDecode(e))).toList();goal=s.getInt('goal')??2000;apiKey=s.getString('gemini_key')??'';water=s.getInt('water_$today')??0;weight=s.getDouble('weight')??70;for(final k in profile.keys){profile[k]=s.getString('profile_$k')??profile[k]!;} });}
+ Future<void> save() async {final s=await SharedPreferences.getInstance();await s.setStringList('meals',meals.map((m)=>jsonEncode(m.toJson())).toList());}
+ Future<void> add(Meal m) async {setState(()=>meals.insert(0,m));await save();}
+ void msg(String t){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(t)));}
+ @override void dispose(){for(final c in [nameC,kcalC,pC,cC,fC,goalC,keyC,chatC]){c.dispose();}super.dispose();}
+ @override Widget build(BuildContext context){final pages=[home(),foodPage(),statsPage(),assistantPage(),profilePage()];return Scaffold(appBar:AppBar(title:Row(children:[Container(width:38,height:38,decoration:BoxDecoration(color:green,borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.eco,color:Colors.white)),const SizedBox(width:10),const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('KaloriVision AI',style:TextStyle(fontWeight:FontWeight.w900)),Text('Fotoğrafını çek, besinini tanı',style:TextStyle(fontSize:11,color:Colors.black54))])]),actions:[IconButton(onPressed:settings,icon:const Icon(Icons.tune))]),body:SafeArea(child:pages[tab]),bottomNavigationBar:NavigationBar(backgroundColor:Colors.white,selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:const[NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home),label:'Ana Sayfa'),NavigationDestination(icon:Icon(Icons.restaurant_menu),label:'Beslenme'),NavigationDestination(icon:Icon(Icons.bar_chart),label:'İstatistik'),NavigationDestination(icon:Icon(Icons.smart_toy_outlined),label:'AI Asistan'),NavigationDestination(icon:Icon(Icons.person_outline),label:'Profil') ]));}
+ Widget heading(String t,{String? sub})=>Padding(padding:const EdgeInsets.only(bottom:12,top:8),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(t,style:const TextStyle(fontSize:19,fontWeight:FontWeight.w900,color:dark)),if(sub!=null)Text(sub,style:const TextStyle(color:Colors.black54,fontSize:12))]));
+ Widget panel(Widget child)=>Card(child:Padding(padding:const EdgeInsets.all(16),child:child));
+ Widget home()=>ListView(padding:const EdgeInsets.fromLTRB(16,8,16,24),children:[
+  Row(children:[Expanded(child:Text('Merhaba, ${profile['name']!.isEmpty?'Sağlıklı Yaşam Tutkunu':profile['name']} 👋',style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))),CircleAvatar(backgroundColor:const Color(0xffd9f2df),child:const Icon(Icons.person,color:green))]),
+  const SizedBox(height:14),
+  Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(gradient:const LinearGradient(colors:[Color(0xff08783c),Color(0xff26ad5b)]),borderRadius:BorderRadius.circular(24)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('GÜNLÜK KALORİ HEDEFİN',style:TextStyle(color:Colors.white70,letterSpacing:1)),const SizedBox(height:10),Row(crossAxisAlignment:CrossAxisAlignment.end,children:[Text('$total',style:const TextStyle(color:Colors.white,fontSize:42,fontWeight:FontWeight.w900)),const Padding(padding:EdgeInsets.only(bottom:8,left:5),child:Text('kcal alındı',style:TextStyle(color:Colors.white70))),const Spacer(),Text('${(goal-total).clamp(0,goal)} kcal kaldı',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))]),const SizedBox(height:12),ClipRRect(borderRadius:BorderRadius.circular(20),child:LinearProgressIndicator(value:(total/goal).clamp(0.0,1.0),minHeight:11,backgroundColor:Colors.white30,color:Colors.white)),const SizedBox(height:7),Text('Hedef: $goal kcal  •  %${(total/goal*100).clamp(0,100).round()} tamamlandı',style:const TextStyle(color:Colors.white70))])),
+  const SizedBox(height:16),heading('Makro besin dengesi'),Row(children:[macro('Protein',protein,'g',const Color(0xff2586d8)),macro('Karbonhidrat',carbs,'g',const Color(0xffe5a62c)),macro('Yağ',fats,'g',const Color(0xffe66b42))]),
+  const SizedBox(height:12),heading('Hızlı işlemler'),GridView.count(crossAxisCount:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisSpacing:10,mainAxisSpacing:10,childAspectRatio:2.5,children:[actionTile(Icons.camera_alt,'Fotoğrafla tanı',analyze),actionTile(Icons.qr_code_scanner,'Barkod tara',barcode),actionTile(Icons.add_circle_outline,'Öğün ekle',manual),actionTile(Icons.lightbulb_outline,'Akıllı öneri',()=>setState(()=>tab=3))]),
+  const SizedBox(height:10),heading('Su takibi',sub:'Günlük önerilen hedef: 8 bardak'),panel(Column(children:[Row(children:[const Icon(Icons.water_drop,color:Colors.blue,size:30),const SizedBox(width:10),Expanded(child:Text('$water / 8 bardak',style:const TextStyle(fontWeight:FontWeight.bold,fontSize:17))),IconButton(onPressed:water>0?()=>waterChange(-1):null,icon:const Icon(Icons.remove_circle_outline)),IconButton(onPressed:()=>waterChange(1),icon:const Icon(Icons.add_circle,color:green))]),ClipRRect(borderRadius:BorderRadius.circular(10),child:LinearProgressIndicator(value:(water/8).clamp(0.0,1.0),minHeight:9,color:Colors.blue))])),
+  const SizedBox(height:12),heading('Bugünkü öğünlerin'),if(todays.isEmpty)panel(const Center(child:Padding(padding:EdgeInsets.all(12),child:Text('Henüz öğün eklemedin. Fotoğraf çekerek veya manuel ekleyerek başlayabilirsin.')))) else ...todays.map(mealTile)
+ ]);
+ void waterChange(int d)async{setState(()=>water=(water+d).clamp(0,30));final s=await SharedPreferences.getInstance();await s.setInt('water_$today',water);}
+ Widget macro(String title,double value,String unit,Color color)=>Expanded(child:panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(value.toStringAsFixed(0)+unit,style:TextStyle(fontSize:20,fontWeight:FontWeight.w900,color:color)),Text(title,style:const TextStyle(fontSize:11,color:Colors.black54)),const SizedBox(height:8),LinearProgressIndicator(value:(value/120).clamp(0.0,1.0),color:color,backgroundColor:color.withOpacity(.12))])));
+ Widget actionTile(IconData i,String t,VoidCallback fn)=>Material(color:Colors.white,borderRadius:BorderRadius.circular(18),child:InkWell(onTap:busy?null:fn,borderRadius:BorderRadius.circular(18),child:Padding(padding:const EdgeInsets.all(12),child:Row(children:[CircleAvatar(backgroundColor:const Color(0xffe5f5e9),child:Icon(i,color:green)),const SizedBox(width:9),Expanded(child:Text(t,style:const TextStyle(fontWeight:FontWeight.w700,fontSize:12)))]))));
+ Widget mealTile(Meal m)=>Card(child:ListTile(leading:const CircleAvatar(backgroundColor:Color(0xffe8f5e9),child:Icon(Icons.restaurant,color:green)),title:Text(m.name,style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('${m.slot} • P ${m.protein}g · K ${m.carbs}g · Y ${m.fat}g'),trailing:Text('${m.calories} kcal',style:const TextStyle(fontWeight:FontWeight.w900,color:green))));
+ Widget foodPage()=>ListView(padding:const EdgeInsets.all(16),children:[heading('Beslenme günlüğü',sub:'Öğünlerini kaydet ve gününü takip et'),actionTile(Icons.camera_alt,'Yemek fotoğrafını analiz et',analyze),const SizedBox(height:8),actionTile(Icons.qr_code_scanner,'Paketli ürünü barkodla tara',barcode),const SizedBox(height:8),actionTile(Icons.add,'Manuel öğün ekle',manual),const SizedBox(height:18),heading('Tüm kayıtlar'),if(meals.isEmpty)const Text('Henüz kayıt bulunmuyor.'),...meals.map(mealTile)]);
+ Widget statsPage(){final last=List.generate(7,(i){final d=DateTime.now().subtract(Duration(days:6-i)).toIso8601String().substring(0,10);return meals.where((m)=>m.date==d).fold<int>(0,(s,m)=>s+m.calories);});final max=last.fold<int>(goal,(a,b)=>a>b?a:b);return ListView(padding:const EdgeInsets.all(16),children:[heading('İstatistikler',sub:'Son 7 günün beslenme özeti'),panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Haftalık kalori grafiği',style:TextStyle(fontWeight:FontWeight.bold)),const SizedBox(height:20),SizedBox(height:150,child:Row(crossAxisAlignment:CrossAxisAlignment.end,children:List.generate(7,(i)=>Expanded(child:Padding(padding:const EdgeInsets.symmetric(horizontal:4),child:Column(mainAxisAlignment:MainAxisAlignment.end,children:[Text(last[i].toString(),style:const TextStyle(fontSize:9)),Container(height:120*last[i]/max,width:22,decoration:BoxDecoration(color:green,borderRadius:BorderRadius.circular(7))),Text(['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'][DateTime.now().subtract(Duration(days:6-i)).weekday-1],style:const TextStyle(fontSize:10))])))))])),const SizedBox(height:12),Row(children:[Expanded(child:panel(stat('Toplam öğün',meals.length.toString(),Icons.restaurant))),Expanded(child:panel(stat('Bugün kalori','$total',Icons.local_fire_department))) ]),heading('Kilo takibi'),panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Son kayıt: ${weight.toStringAsFixed(1)} kg',style:const TextStyle(fontSize:22,fontWeight:FontWeight.bold)),Text('Hedef kilo: ${profile['targetWeight']} kg'),const SizedBox(height:10),FilledButton.icon(onPressed:editWeight,icon:const Icon(Icons.monitor_weight),label:const Text('Bugünkü kilomu güncelle'))]))]);}
+ Widget stat(String t,String v,IconData i)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(i,color:green),Text(v,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),Text(t,style:const TextStyle(color:Colors.black54))]);
+ Widget assistantPage()=>Column(children:[Container(width:double.infinity,padding:const EdgeInsets.all(16),color:const Color(0xffe2f4e6),child:const Row(children:[CircleAvatar(backgroundColor:green,child:Icon(Icons.smart_toy,color:Colors.white)),SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('KaloriVision Beslenme Asistanı',style:TextStyle(fontWeight:FontWeight.bold)),Text('Günlük kayıtlarına göre yardımcı olur',style:TextStyle(fontSize:12))]))])),Expanded(child:ListView(padding:const EdgeInsets.all(16),children:[if(chat.isEmpty)...[assistantBubble('Merhaba! Bugün nasıl beslenmen gerektiği konusunda yardımcı olabilirim. Bugünkü tüketimin $total kcal.'),...['Bugün kaç kalori aldım?','Akşam ne yemeliyim?','Daha düşük kalorili öneri ver'].map((q)=>ActionChip(label:Text(q),onPressed:()=>ask(q)))],...chat.map((m)=>Align(alignment:m['who']=='me'?Alignment.centerRight:Alignment.centerLeft,child:Container(margin:const EdgeInsets.symmetric(vertical:5),padding:const EdgeInsets.all(12),constraints:const BoxConstraints(maxWidth:300),decoration:BoxDecoration(color:m['who']=='me'?const Color(0xffd9f2df):Colors.white,borderRadius:BorderRadius.circular(16)),child:Text(m['text']!))))])),SafeArea(top:false,child:Padding(padding:const EdgeInsets.all(10),child:Row(children:[Expanded(child:TextField(controller:chatC,decoration:InputDecoration(hintText:'Mesajını yaz...',filled:true,fillColor:Colors.white,border:OutlineInputBorder(borderRadius:BorderRadius.circular(24),borderSide:BorderSide.none)))),IconButton(onPressed:()=>ask(chatC.text),icon:const Icon(Icons.send,color:green))]))) ]);
+ Widget assistantBubble(String s)=>panel(Text(s));
+ void ask(String q){if(q.trim().isEmpty)return;final x=q.trim();chatC.clear();String answer;if(x.toLowerCase().contains('kalori'))answer='Bugün şu ana kadar $total kcal aldın. Günlük hedefin $goal kcal. Kalan: ${(goal-total).clamp(0,goal)} kcal. Makroların: protein ${protein.toStringAsFixed(0)} g, karbonhidrat ${carbs.toStringAsFixed(0)} g, yağ ${fats.toStringAsFixed(0)} g.';else if(x.toLowerCase().contains('akşam')||x.toLowerCase().contains('öner'))answer='Dengeli bir seçenek olarak ızgara tavuk veya baklagil, bol salata ve ölçülü tam tahıl tercih edebilirsin. Alerji ve sağlık durumunu dikkate al; bu genel bir öneridir.';else answer='Hedefin ${profile['goal']}, beslenme tercihin ${profile['diet'].isEmpty?'belirtilmemiş':profile['diet']}. Öğünlerini düzenli kaydet; sana kayıtlarına göre genel öneriler sunabilirim.';setState((){chat.add({'who':'me','text':x});chat.add({'who':'ai','text':answer});});}
+ Widget profilePage()=>ListView(padding:const EdgeInsets.all(16),children:[Row(children:[const CircleAvatar(radius:34,backgroundColor:Color(0xffd9f2df),child:Icon(Icons.person,size:42,color:green)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(profile['name']!.isEmpty?'Profilim':profile['name']!,style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold)),const Text('Sağlıklı Yaşam Tutkunu',style:TextStyle(color:Colors.black54))])),IconButton(onPressed:editProfile,icon:const Icon(Icons.edit,color:green))]),heading('Kişisel bilgiler'),panel(Column(children:[profileField('Adın','name'),Row(children:[Expanded(child:profileField('Yaş','age',num:true)),const SizedBox(width:10),Expanded(child:profileField('Boy (cm)','height',num:true))]),Row(children:[Expanded(child:profileField('Kilo (kg)','weight',num:true)),const SizedBox(width:10),Expanded(child:profileField('Hedef kilo','targetWeight',num:true))]),DropdownButtonFormField<String>(value:profile['gender'],decoration:const InputDecoration(labelText:'Cinsiyet'),items:['Kadın','Erkek','Belirtmek istemiyorum'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v){if(v!=null)setState(()=>profile['gender']=v);}),DropdownButtonFormField<String>(value:profile['activity'],isExpanded:true,decoration:const InputDecoration(labelText:'Günlük hareket'),items:['Hareketsiz','Hafif (haftada 1-3 gün spor)','Orta (haftada 3-5 gün)','Aktif (haftada 6-7 gün)','Çok aktif'].map((e)=>DropdownMenuItem(value:e,child:Text(e,overflow:TextOverflow.ellipsis))).toList(),onChanged:(v){if(v!=null)setState(()=>profile['activity']=v);}),DropdownButtonFormField<String>(value:profile['goal'],decoration:const InputDecoration(labelText:'Hedef'),items:['Kilo ver','Koru','Kilo al'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v){if(v!=null)setState(()=>profile['goal']=v);}),SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Şeker hastalığım (diyabet)'),value:profile['diabetes']=='true',onChanged:(v)=>setState(()=>profile['diabetes']=v.toString())),profileField('Alerjiler (virgülle ayır)','allergies'),profileField('Beslenme tercihi (vejetaryen, vegan...)','diet'),const SizedBox(height:12),SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:saveProfile,icon:const Icon(Icons.save),label:const Text('Profili kaydet')))])),heading('Hedef ve ayarlar'),panel(ListTile(leading:const Icon(Icons.flag,color:green),title:const Text('Günlük kalori hedefi'),subtitle:Text('$goal kcal'),onTap:settings))]);
+ Widget profileField(String label,String key,{bool num=false})=>Padding(padding:const EdgeInsets.only(bottom:8),child:TextFormField(initialValue:profile[key],keyboardType:num?TextInputType.number:TextInputType.text,decoration:InputDecoration(labelText:label,border:const OutlineInputBorder()),onChanged:(v)=>profile[key]=v));
+ Future<void> saveProfile()async{final s=await SharedPreferences.getInstance();for(final e in profile.entries){await s.setString('profile_${e.key}',e.value);}final w=double.tryParse(profile['weight']??'');if(w!=null){weight=w;await s.setDouble('weight',w);}if(mounted){setState((){});msg('Profilin kaydedildi.');}}
+ Future<void> editProfile()async{setState(()=>tab=4);}
+ Future<void> editWeight()async{final c=TextEditingController(text:weight.toString());await showDialog(context:context,builder:(d)=>AlertDialog(title:const Text('Kilo güncelle'),content:TextField(controller:c,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Kilon (kg)')),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('İptal')),FilledButton(onPressed:()async{final v=double.tryParse(c.text);if(v!=null){setState(()=>weight=v);final s=await SharedPreferences.getInstance();await s.setDouble('weight',v);profile['weight']=v.toString();await s.setString('profile_weight',profile['weight']!);}if(mounted)Navigator.pop(d);},child:const Text('Kaydet'))]));}
+ Future<void> manual()async{nameC.clear();kcalC.clear();pC.text='0';cC.text='0';fC.text='0';String slot='Ara öğün';await showDialog(context:context,builder:(d)=>StatefulBuilder(builder:(ctx,ss)=>AlertDialog(title:const Text('Öğün ekle'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[field(nameC,'Yemek adı'),DropdownButtonFormField<String>(value:slot,items:['Kahvaltı','Öğle yemeği','Akşam yemeği','Ara öğün'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>ss(()=>slot=v??slot)),field(kcalC,'Kalori (kcal)',num:true),field(pC,'Protein (g)',num:true),field(cC,'Karbonhidrat (g)',num:true),field(fC,'Yağ (g)',num:true)])),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('İptal')),FilledButton(onPressed:(){final k=int.tryParse(kcalC.text);if(nameC.text.trim().isEmpty||k==null){msg('Yemek adı ve kalori gir.');return;}add(Meal(nameC.text.trim(),today,k,double.tryParse(pC.text)??0,double.tryParse(cC.text)??0,double.tryParse(fC.text)??0,slot));Navigator.pop(d);},child:const Text('Kaydet'))]})));}
+ Widget field(TextEditingController c,String label,{bool num=false})=>Padding(padding:const EdgeInsets.only(bottom:8),child:TextField(controller:c,keyboardType:num?const TextInputType.numberWithOptions(decimal:true):TextInputType.text,decoration:InputDecoration(labelText:label,border:const OutlineInputBorder())));
+ Future<void> analyze()async{if(apiKey.isEmpty){msg('Fotoğraf analizi için Ayarlar bölümüne Gemini API anahtarı ekle.');return;}final file=await picker.pickImage(source:ImageSource.gallery,imageQuality:82,maxWidth:1500);if(file==null)return;setState(()=>busy=true);try{final bytes=await File(file.path).readAsBytes();final mime=file.path.toLowerCase().endsWith('.png')?'image/png':'image/jpeg';final uri=Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+apiKey);final r=await http.post(uri,headers:{'Content-Type':'application/json'},body:jsonEncode({'contents':[{'parts':[{'text':'Fotoğraftaki yiyecekleri Türkçe analiz et. Sadece JSON: {"name":"yemek","portion":"porsiyon","calories":400,"protein":20,"carbs":35,"fat":15,"note":"tahmin"}. Sayılar sayısal olsun. Değerler tahminidir.'},{'inline_data':{'mime_type':mime,'data':base64Encode(bytes)}}]}]}));if(r.statusCode<200||r.statusCode>=300)throw Exception('AI yanıtı: ${r.statusCode}');final b=jsonDecode(r.body);final raw=(b['candidates'][0]['content']['parts'] as List).map((e)=>e['text']??'').join();final clean=raw.replaceAll('\\`\\`\\`json','').replaceAll('\\`\\`\\`','').trim();final a=jsonDecode(clean);if(!mounted)return;await showDialog(context:context,builder:(d)=>AlertDialog(title:Text(a['name']??'Yemek analizi'),content:Text('Porsiyon: ${a['portion']}\nKalori: ${a['calories']} kcal\nProtein: ${a['protein']} g\nKarbonhidrat: ${a['carbs']} g\nYağ: ${a['fat']} g\n\n${a['note']??'Yaklaşık değerler'}'),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Kapat')),FilledButton(onPressed:(){Navigator.pop(d);add(Meal(a['name']??'Yemek',today,(a['calories'] as num).round(),(a['protein'] as num).toDouble(),(a['carbs'] as num).toDouble(),(a['fat'] as num).toDouble()));},child:const Text('Günlüğe kaydet'))]));}catch(e){msg('Analiz yapılamadı: $e');}finally{if(mounted)setState(()=>busy=false);}}
+ Future<void> barcode()async{final code=await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>const BarcodePage()));if(code==null)return;setState(()=>busy=true);try{final r=await http.get(Uri.parse('https://world.openfoodfacts.org/api/v2/product/$code.json'));final j=jsonDecode(r.body);if(j['status']!=1){msg('Ürün bulunamadı.');return;}final pr=j['product'];final n=pr['nutriments']??{};final cal=(n['energy-kcal_100g'] as num? ?? 0).round(),p=(n['proteins_100g'] as num? ?? 0).toDouble(),c=(n['carbohydrates_100g'] as num? ?? 0).toDouble(),f=(n['fat_100g'] as num? ?? 0).toDouble();if(!mounted)return;await showDialog(context:context,builder:(d)=>AlertDialog(title:Text(pr['product_name']??'Barkod ürünü'),content:Text('100 g için $cal kcal\nProtein $p g • Karbonhidrat $c g • Yağ $f g'),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Kapat')),FilledButton(onPressed:(){Navigator.pop(d);add(Meal(pr['product_name']??'Paketli ürün',today,cal,p,c,f));},child:const Text('Ekle'))]));}catch(e){msg('Barkod sorgusu başarısız: $e');}finally{if(mounted)setState(()=>busy=false);}}
+ Future<void> settings()async{goalC.text=goal.toString();keyC.text=apiKey;await showDialog(context:context,builder:(d)=>AlertDialog(title:const Text('Uygulama ayarları'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[field(goalC,'Günlük kalori hedefi',num:true),TextField(controller:keyC,obscureText:true,decoration:const InputDecoration(labelText:'Gemini API anahtarı',helperText:'Fotoğrafla AI analizi için gerekir',border:OutlineInputBorder())),const SizedBox(height:10),const SelectableText('Anahtar oluştur: https://aistudio.google.com/app/apikey'),const Text('Fotoğraf yalnızca analiz istediğinde Gemini servisine gönderilir. Kalori tahminleri tıbbi tavsiye değildir.',style:TextStyle(fontSize:12))])),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('İptal')),FilledButton(onPressed:()async{final s=await SharedPreferences.getInstance();goal=int.tryParse(goalC.text)??goal;apiKey=keyC.text.trim();await s.setInt('goal',goal);await s.setString('gemini_key',apiKey);if(mounted){Navigator.pop(d);setState((){});}},child:const Text('Kaydet'))]));}
 }
-
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
-  @override State<HomePage> createState()=>_HomePageState();
-}
-class _HomePageState extends State<HomePage> {
-  final picker=ImagePicker();
-  final name=TextEditingController(), kcal=TextEditingController(), protein=TextEditingController(), carbs=TextEditingController(), fat=TextEditingController(), goalInput=TextEditingController(), keyInput=TextEditingController();
-  List<Meal> meals=[];
-  int goal=2000, tab=0;
-  String apiKey='';
-  bool busy=false;
-  String get today=>DateTime.now().toIso8601String().substring(0,10);
-  List<Meal> get todays=>meals.where((m)=>m.date==today).toList();
-  int get total=>todays.fold(0,(s,m)=>s+m.calories);
-  double get prot=>todays.fold(0.0,(s,m)=>s+m.protein);
-  double get carb=>todays.fold(0.0,(s,m)=>s+m.carbs);
-  double get fatTotal=>todays.fold(0.0,(s,m)=>s+m.fat);
-
-  @override void initState(){super.initState();load();}
-  Future<void> load() async {
-    final s=await SharedPreferences.getInstance();
-    if(!mounted)return;
-    setState((){
-      meals=(s.getStringList('meals')??[]).map((e)=>Meal.fromJson(jsonDecode(e))).toList();
-      goal=s.getInt('goal')??2000;
-      apiKey=s.getString('gemini_key')??'';
-    });
-  }
-  Future<void> saveMeals() async {
-    final s=await SharedPreferences.getInstance();
-    await s.setStringList('meals',meals.map((m)=>jsonEncode(m.toJson())).toList());
-  }
-  Future<void> add(Meal m) async {setState(()=>meals.insert(0,m));await saveMeals();}
-  void msg(String s)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));
-  Widget field(TextEditingController c,String label,{bool number=false})=>Padding(padding:const EdgeInsets.only(bottom:10),child:TextField(controller:c,keyboardType:number?const TextInputType.numberWithOptions(decimal:true):TextInputType.text,decoration:InputDecoration(labelText:label,border:const OutlineInputBorder())));
-
-  Future<void> manual() async {
-    name.clear();kcal.clear();protein.text='0';carbs.text='0';fat.text='0';
-    await showDialog(context:context,builder:(d)=>AlertDialog(
-      title:const Text('Öğün ekle'),
-      content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[field(name,'Yemek adı'),field(kcal,'Kalori (kcal)',number:true),field(protein,'Protein (g)',number:true),field(carbs,'Karbonhidrat (g)',number:true),field(fat,'Yağ (g)',number:true)])),
-      actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('İptal')),FilledButton(onPressed:(){
-        final n=int.tryParse(kcal.text);
-        if(name.text.trim().isEmpty||n==null){msg('Yemek adı ve kalori gir.');return;}
-        add(Meal(name.text.trim(),today,n,double.tryParse(protein.text)??0,double.tryParse(carbs.text)??0,double.tryParse(fat.text)??0));
-        Navigator.pop(d);
-      },child:const Text('Kaydet'))],
-    ));
-  }
-
-  Future<void> analyze() async {
-    if(apiKey.trim().isEmpty){msg('Önce Ayarlar bölümüne Gemini API anahtarını ekle.');return;}
-    final file=await picker.pickImage(source:ImageSource.gallery,imageQuality:80,maxWidth:1500);
-    if(file==null)return;
-    setState(()=>busy=true);
-    try{
-      final bytes=await File(file.path).readAsBytes();
-      final mime=file.path.toLowerCase().endsWith('.png')?'image/png':'image/jpeg';
-      final uri=Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+apiKey.trim());
-      final response=await http.post(uri,headers:{'Content-Type':'application/json'},body:jsonEncode({
-        'contents':[{'parts':[
-          {'text':'Yemeği Türkçe analiz et. Sadece JSON döndür: {"name":"yemek adı","portion":"porsiyon","calories":400,"protein":20,"carbs":35,"fat":15,"note":"tahmin notu"}. Sayısal alanlar sayı olsun. Değerler yaklaşık tahmindir.'},
-          {'inline_data':{'mime_type':mime,'data':base64Encode(bytes)}}
-        ]}]
-      }));
-      if(response.statusCode<200||response.statusCode>=300)throw Exception('Gemini HTTP '+response.statusCode.toString());
-      final body=jsonDecode(response.body);
-      final raw=(body['candidates'][0]['content']['parts'] as List).map((e)=>e['text']??'').join();
-      final clean=raw.replaceAll(String.fromCharCodes([96,96,96])+'json','').replaceAll(String.fromCharCodes([96,96,96]),'').trim();
-      final a=jsonDecode(clean) as Map<String,dynamic>;
-      if(!mounted)return;
-      await showDialog(context:context,builder:(d)=>AlertDialog(
-        title:Text(a['name']??'Yemek analizi'),
-        content:Text('Porsiyon: '+(a['portion']??'Tahmini').toString()+'\nKalori: '+a['calories'].toString()+' kcal\nProtein: '+a['protein'].toString()+' g\nKarbonhidrat: '+a['carbs'].toString()+' g\nYağ: '+a['fat'].toString()+' g\n\n'+(a['note']??'Değerler tahminidir.').toString()),
-        actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Kapat')),FilledButton(onPressed:(){
-          Navigator.pop(d);
-          add(Meal(a['name']??'Yemek',today,(a['calories'] as num).round(),(a['protein'] as num).toDouble(),(a['carbs'] as num).toDouble(),(a['fat'] as num).toDouble()));
-        },child:const Text('Günlüğe ekle'))],
-      ));
-    }catch(e){msg('Fotoğraf analizi başarısız: '+e.toString());}
-    finally{if(mounted)setState(()=>busy=false);}
-  }
-
-  Future<void> barcode() async {
-    final code=await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>const BarcodePage()));
-    if(code==null||code.isEmpty)return;
-    setState(()=>busy=true);
-    try{
-      final r=await http.get(Uri.parse('https://world.openfoodfacts.org/api/v2/product/'+code+'.json'));
-      final j=jsonDecode(r.body);
-      if(r.statusCode!=200||j['status']!=1||j['product']==null){msg('Ürün bulunamadı.');return;}
-      final product=j['product'] as Map<String,dynamic>;
-      final n=product['nutriments']??{};
-      final cal=(n['energy-kcal_100g'] as num? ?? 0).round();
-      final pr=(n['proteins_100g'] as num? ?? 0).toDouble();
-      final cb=(n['carbohydrates_100g'] as num? ?? 0).toDouble();
-      final ft=(n['fat_100g'] as num? ?? 0).toDouble();
-      if(!mounted)return;
-      await showDialog(context:context,builder:(d)=>AlertDialog(
-        title:Text(product['product_name']??'Barkod ürünü'),
-        content:Text('100 g için: '+cal.toString()+' kcal\nProtein '+pr.toString()+' g · Karbonhidrat '+cb.toString()+' g · Yağ '+ft.toString()+' g'),
-        actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Kapat')),FilledButton(onPressed:(){Navigator.pop(d);add(Meal(product['product_name']??'Paketli ürün',today,cal,pr,cb,ft));},child:const Text('100 g ekle'))],
-      ));
-    }catch(e){msg('Barkod sorgusu başarısız: '+e.toString());}
-    finally{if(mounted)setState(()=>busy=false);}
-  }
-
-  Future<void> settings() async {
-    goalInput.text=goal.toString();keyInput.text=apiKey;
-    await showDialog(context:context,builder:(d)=>AlertDialog(
-      title:const Text('Ayarlar'),
-      content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
-        field(goalInput,'Günlük kalori hedefi',number:true),
-        TextField(controller:keyInput,obscureText:true,decoration:const InputDecoration(labelText:'Gemini API anahtarı',border:OutlineInputBorder(),helperText:'Fotoğraf analizi için gereklidir')),
-        const SizedBox(height:10),
-        const SelectableText('API anahtarı: https://aistudio.google.com/app/apikey'),
-        const Text('Fotoğrafı analiz etmeyi seçtiğinde görsel Gemini servisine gönderilir. Sonuçlar tahmindir.',style:TextStyle(fontSize:12)),
-      ])),
-      actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('İptal')),FilledButton(onPressed:()async{
-        final s=await SharedPreferences.getInstance();
-        final g=int.tryParse(goalInput.text);
-        if(g!=null&&g>0){goal=g;await s.setInt('goal',goal);}
-        apiKey=keyInput.text.trim();await s.setString('gemini_key',apiKey);
-        if(mounted){Navigator.pop(d);setState((){});msg('Ayarlar kaydedildi.');}
-      },child:const Text('Kaydet'))],
-    ));
-  }
-
-  @override void dispose(){name.dispose();kcal.dispose();protein.dispose();carbs.dispose();fat.dispose();goalInput.dispose();keyInput.dispose();super.dispose();}
-
-  @override Widget build(BuildContext context){
-    final pages=[dashboard(),history(),settingsPage()];
-    return Scaffold(
-      appBar:AppBar(title:Row(children:[
-        Container(width:38,height:38,decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary,borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.restaurant,color:Colors.white)),
-        const SizedBox(width:10),
-        const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('KaloriVision AI',style:TextStyle(fontWeight:FontWeight.bold)),Text('Beslenme yol arkadaşın',style:TextStyle(fontSize:11))]),
-      ]),actions:[IconButton(onPressed:settings,icon:const Icon(Icons.tune))]),
-      body:SafeArea(child:pages[tab]),
-      floatingActionButton:tab==0?FloatingActionButton.extended(onPressed:manual,icon:const Icon(Icons.add),label:const Text('Öğün ekle')):null,
-      bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:const[
-        NavigationDestination(icon:Icon(Icons.home_outlined),label:'Bugün'),
-        NavigationDestination(icon:Icon(Icons.history),label:'Geçmiş'),
-        NavigationDestination(icon:Icon(Icons.settings_outlined),label:'Ayarlar'),
-      ]),
-    );
-  }
-
-  Widget dashboard()=>ListView(padding:const EdgeInsets.fromLTRB(16,14,16,100),children:[
-    Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(gradient:const LinearGradient(colors:[Color(0xff13765f),Color(0xff2ba789)]),borderRadius:BorderRadius.circular(24)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      const Text('BUGÜNÜN ÖZETİ',style:TextStyle(color:Colors.white70,letterSpacing:1)),
-      const SizedBox(height:12),
-      Row(crossAxisAlignment:CrossAxisAlignment.end,children:[
-        Text(total.toString(),style:const TextStyle(color:Colors.white,fontSize:42,fontWeight:FontWeight.bold)),
-        const Padding(padding:EdgeInsets.only(bottom:8,left:6),child:Text('kcal alındı',style:TextStyle(color:Colors.white70))),
-        const Spacer(),
-        Text((goal-total).clamp(0,goal).toString()+' kcal kaldı',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w600)),
-      ]),
-      const SizedBox(height:12),
-      ClipRRect(borderRadius:BorderRadius.circular(20),child:LinearProgressIndicator(value:(total/goal).clamp(0.0,1.0),minHeight:10,backgroundColor:Colors.white30,color:Colors.white)),
-      const SizedBox(height:8),
-      Text('Günlük hedef: '+goal.toString()+' kcal',style:const TextStyle(color:Colors.white70)),
-    ])),
-    const SizedBox(height:20),
-    const Text('Makro besinler',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-    const SizedBox(height:10),
-    Row(children:[macro('Protein',prot),const SizedBox(width:8),macro('Karbonhidrat',carb),const SizedBox(width:8),macro('Yağ',fatTotal)]),
-    const SizedBox(height:22),
-    const Text('Hızlı işlemler',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-    const SizedBox(height:10),
-    Row(children:[Expanded(child:quick(Icons.photo_camera_outlined,'Fotoğraftan analiz',analyze)),const SizedBox(width:10),Expanded(child:quick(Icons.qr_code_scanner,'Barkod tara',barcode))]),
-    const SizedBox(height:22),
-    const Text('Bugünkü öğünlerin',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-    const SizedBox(height:8),
-    if(todays.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(24),child:Column(children:[Icon(Icons.restaurant_menu,size:38,color:Colors.grey),SizedBox(height:8),Text('Henüz öğün eklemedin'),Text('Fotoğrafla analiz et veya manuel ekle.',style:TextStyle(color:Colors.grey))])))
-    else ...todays.map(mealTile),
-    if(busy)const Padding(padding:EdgeInsets.all(18),child:Center(child:CircularProgressIndicator())),
-  ]);
-  Widget macro(String label,double value)=>Expanded(child:Card(elevation:0,child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(value.toStringAsFixed(0)+' g',style:const TextStyle(fontWeight:FontWeight.bold,fontSize:17)),Text(label,style:const TextStyle(fontSize:11,color:Colors.grey))]))));
-  Widget quick(IconData icon,String label,VoidCallback action)=>InkWell(onTap:busy?null:action,borderRadius:BorderRadius.circular(16),child:Card(elevation:0,child:Padding(padding:const EdgeInsets.symmetric(vertical:18,horizontal:8),child:Column(children:[Icon(icon,size:28,color:Theme.of(context).colorScheme.primary),const SizedBox(height:8),Text(label,textAlign:TextAlign.center,style:const TextStyle(fontWeight:FontWeight.w600,fontSize:12))]))));
-  Widget mealTile(Meal m)=>Card(elevation:0,child:ListTile(leading:const CircleAvatar(child:Icon(Icons.restaurant)),title:Text(m.name),subtitle:Text('P: '+m.protein.toString()+' g · K: '+m.carbs.toString()+' g · Y: '+m.fat.toString()+' g'),trailing:Text(m.calories.toString()+' kcal',style:const TextStyle(fontWeight:FontWeight.bold))));
-  Widget history()=>ListView(padding:const EdgeInsets.all(16),children:[const Text('Öğün geçmişi',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),const SizedBox(height:12),if(meals.isEmpty)const Text('Henüz kayıt yok.'),...meals.map(mealTile)]);
-  Widget settingsPage()=>ListView(padding:const EdgeInsets.all(16),children:[
-    const Text('Ayarlar',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
-    Card(child:ListTile(leading:const Icon(Icons.flag_outlined),title:const Text('Günlük kalori hedefi'),subtitle:Text(goal.toString()+' kcal'),trailing:const Icon(Icons.chevron_right),onTap:settings)),
-    Card(child:ListTile(leading:const Icon(Icons.key_outlined),title:const Text('Gemini API anahtarı'),subtitle:Text(apiKey.isEmpty?'Eklenmedi':'Kaydedildi'),trailing:const Icon(Icons.chevron_right),onTap:settings)),
-    const Card(child:ListTile(leading:Icon(Icons.privacy_tip_outlined),title:Text('Gizlilik'),subtitle:Text('Öğünler cihazda saklanır. Fotoğraf yalnızca analiz isteğinde Gemini servisine gönderilir.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('Bilgilendirme'),subtitle:Text('Kalori değerleri tahmindir, tıbbi tavsiye değildir.'))),
-  ]);
-}
-
-class BarcodePage extends StatefulWidget {
-  const BarcodePage({super.key});
-  @override State<BarcodePage> createState()=>_BarcodePageState();
-}
-class _BarcodePageState extends State<BarcodePage>{
-  bool found=false;
-  @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('Barkod tara')),
-    body:MobileScanner(onDetect:(capture){
-      if(found)return;
-      final code=capture.barcodes.isNotEmpty?capture.barcodes.first.rawValue:null;
-      if(code!=null&&code.isNotEmpty){found=true;Navigator.pop(context,code);}
-    }),
-  );
-}
+class BarcodePage extends StatefulWidget{const BarcodePage({super.key});@override State<BarcodePage> createState()=>_BarcodePageState();}
+class _BarcodePageState extends State<BarcodePage>{bool found=false;@override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Barkod tara')),body:MobileScanner(onDetect:(capture){if(found)return;final code=capture.barcodes.isNotEmpty?capture.barcodes.first.rawValue:null;if(code!=null&&code.isNotEmpty){found=true;Navigator.pop(context,code);}}));}
