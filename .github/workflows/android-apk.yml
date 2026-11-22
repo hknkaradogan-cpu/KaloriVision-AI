@@ -8,7 +8,7 @@ on:
       - 'pubspec.yaml'
       - '.github/workflows/**'
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -29,6 +29,11 @@ jobs:
         run: |
           cd /tmp/kv_build
           flutter build apk --release
+      - name: Publish APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.0.1 /tmp/kv_build/build/app/outputs/flutter-apk/app-release.apk --title "KaloriVision AI 1.0.1" --notes "🥳 KaloriVision AI 1.0.1 hazır." || gh release upload v1.0.1 /tmp/kv_build/build/app/outputs/flutter-apk/app-release.apk --clobber
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
