@@ -99,7 +99,7 @@ class _HomePageState extends State<HomePage> {
       if(response.statusCode<200||response.statusCode>=300)throw Exception('Gemini HTTP '+response.statusCode.toString());
       final body=jsonDecode(response.body);
       final raw=(body['candidates'][0]['content']['parts'] as List).map((e)=>e['text']??'').join();
-      final clean=raw.replaceAll('''' + '```json' + '''','').replaceAll('''' + '```' + '''','').trim();
+      final clean=raw.replaceAll(String.fromCharCodes([96,96,96])+'json','').replaceAll(String.fromCharCodes([96,96,96]),'').trim();
       final a=jsonDecode(clean) as Map<String,dynamic>;
       if(!mounted)return;
       await showDialog(context:context,builder:(d)=>AlertDialog(
