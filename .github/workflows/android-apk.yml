@@ -1,0 +1,38 @@
+name: Android APK Build
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/**'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Prepare Flutter Android project
+        run: |
+          flutter create --platforms=android --org com.kalorivision --project-name kalorivision_ai /tmp/kv_build
+          cp pubspec.yaml /tmp/kv_build/pubspec.yaml
+          rm -rf /tmp/kv_build/lib
+          cp -R lib /tmp/kv_build/lib
+          cd /tmp/kv_build
+          flutter pub get
+      - name: Build release APK
+        run: |
+          cd /tmp/kv_build
+          flutter build apk --release
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KaloriVision-AI-APK
+          path: /tmp/kv_build/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
